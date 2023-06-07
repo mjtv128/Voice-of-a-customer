@@ -67,7 +67,7 @@ This project is built with Python 3, and the visualizations are created using Ju
 
 * Clone repo with SSH key
 ```
-git clone git@gitlab.oit.duke.edu:duke-mids/workingprojectrepositories/policy-genius.git
+git clone git@github.com:mjtv128/Voice-of-a-customer.git
 ```
 
 * Install the necessary dependencies:
