@@ -97,21 +97,12 @@ With models in hand, we created a production-ready pipeline, allowing Policygeni
 Overall, we managed to automate the topic identification process from customer text reviews. The models, pipeline, and dashboard are expected to significantly reduce the effort required for the original manual extraction process and enhance the analysis accuracy at the same time. This project provides businesses with an effective and efficient way to analyze textual feedback and gain valuable insights into the needs and preferences of their customers.
 
 ## Authors and acknowledgment
-This project was a capstone project for the Master in Interdisciplinary Data Science and the Master's in Statistical Science, with the partnership of Policygenius. The project was developed by Godwin Anguzu (MIDS, Duke), Lexin Lu (MSS, Duke), Deekshita Saikia (MIDS, Duke), and Michelle Van(MIDS, Duke). We would like to extend our thanks to the following individuals from Duke University for providing valuable feedback and suggestions during the development:
-
-- Greg Herschlag, Duke University
-- Jason Byers, Duke University
-- Ryan Huang, Duke University
 
 We would also like to acknowledge the guidance, support, and expertise provided by the following individuals from Policygenius:
 
 - Brenna Hayes, Director of Marketing Strategy
 - Emily Nightingale, Senior Data Scientist
 - Dustin Tucker, Senior Director of Data Science and Engineering
-
-We appreciate the MIDS and MSS programs at Duke, as well as Policygenius for providing us with this great opportunity to integrate into a year-long interdisciplinary capstone project that can solve real-life problems through data science.
-
-Finally, we are grateful to the users of our application for their feedback and suggestions, which helped us improve the user experience and functionality of the application.
 
 ## Contributing
 Contributions are welcome! Please open a pull request and we will respond at the earliest.
