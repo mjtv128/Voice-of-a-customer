@@ -1,8 +1,0 @@
-.DS_Store
-.Rproj.user
-
-model_checkpoints/promoters_checkpoint
-model_checkpoints/det_checkpoint
-model_checkpoints/passive_checkpoint
-model_checkpoints/csat_checkpoint
-
