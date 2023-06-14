@@ -1,0 +1,295 @@
+---
+title: "PG_STM"
+author: "Lexin Lu"
+date: "2023-02-19"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+# Load the necessary libraries
+knitr::opts_chunk$set(echo = TRUE)
+library(readr)
+library(ggplot2)
+ggplot2::theme_set(theme_bw())
+library(tidyr)
+library(dplyr)
+#install.packages("stm", "igraph", "stmCorrViz")
+library(stm)        # Package for STM
+library(igraph)     # Package for network analysis and visualization
+library(stmCorrViz) # Package for hierarchical correlation view of STMs
+library(quanteda)
+library(topicmodels)
+library(text2vec)
+```
+
+# Data Preprocessing
+```{r}
+# Load data
+nps <- read_csv("nps_verbatim_cleaned.csv", show_col_types = F)
+colnames(nps) <- c("id","year", "customer_cat", "verbatim","verbatim_clean")
+# (13261, 5)
+```
+`nps_verbatim_cleaned.csv` is a subset of the cleaned NPS data set. It only contains ID, Year, customer segment, original raw comments, as well as cleaned verbatim. 
+
+
+### Add n-grams
+```{r}
+ngram_df <- as.matrix(read.csv("nps_bitrigrams_df.csv", header = F, na.strings = ""))
+
+# Paste single words together
+nps["verbatim_ngrams"] <- data.frame(
+  apply(ngram_df, 1, function(x) na.omit(x) %>% paste(collapse = " "))
+  )
+```
+`nps_bitrigrams_df.csv` is obtained from the processed NPS data set where bi-grams and tri-grams have been created using `gensim` in Python. 
+
+
+
+```{r}
+nps$customer_cat <- as.factor(nps$customer_cat)
+```
+
+
+```{r}
+set.seed(0)
+
+# Pre-Process and Define a corpus object from the output
+nps_processed <- textProcessor(
+  documents = nps$verbatim_ngrams,
+  metadata = nps,
+  lowercase = T, removestopwords = T, removenumbers = T,
+  removepunctuation = F, ucp = F, stem = F,
+  wordLengths = c(3, Inf),
+  verbose = F
+)
+
+nps_out <- prepDocuments(nps_processed$documents, 
+                         nps_processed$vocab, 
+                         nps_processed$meta, lower.thresh = 1)  
+```
+```{r}
+plotRemoved(nps_processed$documents, lower.thresh = seq(0, 10, by = 1))
+```
+
+
+# Model selection
+```{r}
+# Select best model and best K
+mdl_select <- manyTopics(
+  documents = nps_out$documents, 
+  vocab = nps_out$vocab, 
+  K = c(4:10), 
+  prevalence = ~ customer_cat + year,
+  data = nps_out$meta, 
+  max.em.its = 75,
+  verbose = F,
+  seed = 2023, 
+  runs = 15)
+```
+
+### Diagnostics
+- Exclusivity: how exclusive are the words in each topics  
+- Semantic coherence: how coherent are the words in each topics semantically.  
+- Heldout likelihood: hold out some fraction of the words in a set of documents, train the model and use the document-level latent variables to evaluate the probability of the heldout portion
+- Lower bound: the approximation to the lower bound on the marginal likelihood of documents
+- Residual dispersion: the multi-nomial dispersion of the STM residuals
+
+```{r}
+# Diagnostics
+data.frame(
+  K = sapply(c(4:10), function(x) rep(x,x)) %>% unlist(),
+  exclusivity = unlist(mdl_select$exclusivity),
+  semcoh = unlist(mdl_select$semcoh)
+) %>%
+  ggplot(aes(semcoh, exclusivity, col = as.factor(K))) +
+  geom_point(size = 2, alpha = 0.7) +
+  labs(x = "Semantic coherence",
+       y = "Exclusivity",
+       title = "Comparing exclusivity and semantic coherence",
+       #caption = "Models with fewer topics have higher semantic coherence for more topics, but lower exclusivity",
+       color='Topic') 
+```
+
+
+
+```{r}
+# Select K
+k_res <- searchK(
+  documents = nps_out$documents, 
+  vocab = nps_out$vocab, 
+  K = c(6:10),
+  heldout.seed = 2023,
+  prevalence=~ customer_cat + year,
+  data = nps_out$meta)
+
+
+# Plot of diagnostics
+plot(k_res)
+
+```
+
+
+**Final Selection: K = 8**
+
+# Model
+
+```{r}
+# stm.mdl8 <- stm(documents = nps_out$documents, 
+#               vocab = nps_out$vocab, 
+#               K = 8, 
+#               data = nps_out$meta,
+#               prevalence = ~ customer_cat+ year,
+#               seed = 2023,
+#               verbose = F,
+#               max.em.its = 100,
+#               interactions = F)
+
+stm.mdl8<- mdl_select$out[[5]]
+```
+
+### Output
+- Highest Prob: words within each topic with the highest probability (inferred directly from topic-word distribution parameter $\beta$).  
+- FREX: words that are both frequent and exclusive, identifying words that distinguish topics. This is calculated by taking the harmonic mean of rank by probability within the topic (frequency) and rank by distribution of topic given word $p(z \mid w = v)$ (exclusivity)   
+- Score: words with highest Score, a metric used effectively in the `lda` package  
+- Lift: words with highest Lift, which is calculated by dividing the topic-word distribution by the empirical word count probability distribution (Lift = $\frac{\beta}{\bar w}$) 
+
+
+# Result
+```{r}
+labelTopics(stm.mdl8)
+```
+
+```{r}
+plot(stm.mdl8, type="summary",xlim=c(0,.4))
+```
+
+```{r}
+plot(stm.mdl8, type="labels", topics = c(1,3))
+
+sample_comments <- findThoughts(
+  stm.mdl8,
+  text = sample(nps$verbatim,
+                size = length(nps_out$documents)),
+  n = 3,
+  topic = c(1, 3)
+)
+
+plot(sample_comments)
+```
+
+
+```{r}
+# word distribution
+library(tidytext)
+library(ggh4x)
+td_beta <- tidy(stm.mdl8)
+
+td_beta %>%
+  group_by(topic) %>%
+  top_n(10, beta) %>%
+  ungroup() %>%
+  mutate(topic = paste0("Topic ", topic),
+         term = reorder_within(term, beta, topic)) %>%
+  ggplot(aes(term, beta, fill = as.factor(topic))) +
+  geom_col(alpha = 0.8, show.legend = FALSE) +
+  facet_wrap(~ topic, scales = 'free', ncol = 4) +
+  coord_flip() +
+  scale_x_reordered() +
+  labs(x = NULL, y = NULL,
+       title = "Highest word probabilities for each topic")
+```
+
+
+### Estimate Effect of the Customer Segment
+```{r}
+prep <- estimateEffect(
+  ~ customer_cat + year, 
+  stm.mdl8, 
+  meta=nps_out$meta, 
+  uncertainty="Global")
+```
+
+```{r}
+plot(prep, 
+     covariate="customer_cat", 
+     topics= 1:8, 
+     model=stm.mdl8, 
+     method="difference", 
+     cov.value1="promoters", 
+     cov.value2="detractors",
+     xlab="Promoter ------- Detractor", 
+     main="Effect of Promoters vs. Detractors",
+     #xlim=c(-.15,.15), 
+     )
+
+plot(prep,covariate="customer_cat", method="difference",cov.value1="promoters", 
+     cov.value2="detractors")
+```
+
+
+### Yearly Trend
+```{r}
+plot(prep, "year", 
+     method="continuous", 
+     topics=1, model=best_stm, 
+     printlegend=FALSE, 
+     xaxt="n", 
+     xlab="Year")
+monthseq <- seq(from=as.Date("2008-01-01"), to=as.Date("2008-12-01"), by="month")
+monthnames <- months(monthseq)
+axis(1, at=as.numeric(monthseq)-min(as.numeric(monthseq)), labels=monthnames)
+```
+
+
+
+# Coherence and Perplexity for model comparison
+```{r}
+# Coherence score -- comparable with c_v in python
+library(text2vec)
+library(Matrix)
+set.seed(303030)
+coherence_score <- function(topicnum, iternum) {
+  lda_mdl = LDA$new(n_topics = topicnum)
+  doc_topic_dist = lda_mdl$fit_transform(dtm, n_iter = iternum)
+  tw = lda_mdl$get_top_words(n = 10, lambda = 0.3)
+  tcm = crossprod(sign(dtm))
+  return(mean(coherence(tw, tcm, n_doc_tcm = 3000, "mean_npmi")))
+}
+
+
+tokens = word_tokenizer(tolower(nps$verbatim_ngrams))
+it = itoken(tokens, ids = nps$id)
+v = create_vocabulary(it)
+v = prune_vocabulary(v, term_count_min = 2, doc_proportion_max = 0.05)
+dtm = create_dtm(it, vocab_vectorizer(v))
+coherence_df <- matrix(NA, nrow = 7, ncol = 2)
+topicnum <- c(4:10)
+for (i in 1:length(topicnum)) {
+  coherence_df[i, ] <- c(topicnum[i], coherence_score(i, 50))}
+coherence_df
+```
+
+```{r}
+# Output the coherence score csv
+write.csv(coherence_df, "STM_coherence_score.csv", row.names=FALSE)
+```
+
+```{r}
+# Perplexity
+# perplextity <- function(topicnum, iternum) {
+#   model = LDA$new(n_topics = topicnum,
+#                   doc_topic_prior = 0.1,
+#                   topic_word_prior = 0.01)
+#   doc_topic_dist = model$fit_transform(dtm, n_iter = iternum,
+#       n_check_convergence = 1, convergence_tol = -1, progressbar = F)
+#   topic_word_dist = model$topic_word_distribution
+#   perplexity(dtm, topic_word_dist, doc_topic_dist)
+# }
+```
+
+
+
+
+
+
+
