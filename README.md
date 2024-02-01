@@ -1,6 +1,6 @@
 # Voice of the Policygenius Customer <img width=90 align="right" src="https://upload.wikimedia.org/wikipedia/commons/thumb/e/e6/Duke_University_logo.svg/1024px-Duke_University_logo.svg.png">
 
-
+To maintain privacy and confidentiality while also ensuring transparency, synthetic data was utilised that mimics the patterns and distributions of the original datasets mentioned above but does not include any personal or confidential information. Not all the development/ infrastucture and research portions of this project were NOT included due to privacy and confidentiality, but some details on the methodologies and findings are included here. If there are any questions about this, please contact me for more information. Long Short-Term Memory (LSTM), a language model that can generate tabular data with mixed categorical, numeric, time-series, and text fields, were utilized to produce synthetic data sets consisting of 5000 records for both the NPS and CSAT datasets. The main variables we used in our project included timestamps, reviewer comments, survey response IDs, and application IDs. 
 
 ## Project status
 *complete*
